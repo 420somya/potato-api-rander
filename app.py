@@ -1,18 +1,24 @@
 from flask import Flask, request, jsonify
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
-from PIL import Image
 import numpy as np
+from PIL import Image
 import io
+import tensorflow as tf
 
 app = Flask(__name__)
-model = load_model("potatoes.h5")
+
+# Load TFLite model
+interpreter = tf.lite.Interpreter(model_path="potatoes.tflite")
+interpreter.allocate_tensors()
+
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
 class_names = ['Early Blight', 'Late Blight', 'Healthy']
 
 def preprocess_image(img):
     img = img.resize((224, 224))
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
     return img_array
 
 @app.route("/predict", methods=["POST"])
@@ -23,9 +29,13 @@ def predict():
     file = request.files['file']
     img = Image.open(file.stream)
     processed_img = preprocess_image(img)
-    predictions = model.predict(processed_img)
-    predicted_class = class_names[np.argmax(predictions)]
-    confidence = float(np.max(predictions))
+
+    interpreter.set_tensor(input_details[0]['index'], processed_img)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+
+    predicted_class = class_names[np.argmax(output_data)]
+    confidence = float(np.max(output_data))
 
     return jsonify({
         "prediction": predicted_class,
