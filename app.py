@@ -6,6 +6,7 @@ import io
 import tensorflow as tf
 
 app = Flask(__name__)
+CORS(app)
 
 # Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="potatoes.tflite")
